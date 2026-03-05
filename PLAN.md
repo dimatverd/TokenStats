@@ -166,7 +166,7 @@ POST /api/v1/devices/register    — регистрация устройства
 
 ---
 
-## Фаза 2 — Apple Watch (SwiftUI, watchOS 10+)
+## Фаза 2 — iOS-приложение + Apple Watch (SwiftUI, iOS 17+, watchOS 10+)
 
 ### 2.1 Структура проекта
 
@@ -181,14 +181,17 @@ TokenStats/
 │   │   ├── APIClient.swift
 │   │   └── KeychainService.swift
 │   └── Extensions/
-├── TokenStatsApp/               # iOS companion app
+├── TokenStatsApp/               # iOS app (полноценный дашборд)
 │   ├── TokenStatsApp.swift
 │   ├── Views/
-│   │   ├── DashboardView.swift
-│   │   ├── ProviderDetailView.swift
-│   │   ├── SettingsView.swift   # Ввод read-only ключей + инструкция
-│   │   └── HistoryChartView.swift
+│   │   ├── DashboardView.swift      # Сводка по всем провайдерам
+│   │   ├── ProviderDetailView.swift  # Детали провайдера + графики
+│   │   ├── HistoryChartView.swift    # Swift Charts — usage/costs за период
+│   │   ├── SettingsView.swift        # Управление ключами + инструкции
+│   │   └── NotificationsView.swift   # Настройка порогов уведомлений
 │   └── ViewModels/
+│       ├── DashboardViewModel.swift
+│       └── ProviderViewModel.swift
 ├── TokenStatsWatch/             # watchOS app
 │   ├── TokenStatsWatchApp.swift
 │   ├── Views/
@@ -199,25 +202,48 @@ TokenStats/
 │   │   └── ComplicationViews.swift
 │   └── ViewModels/
 │       └── WatchViewModel.swift
-└── TokenStatsWidgets/
-    ├── SummaryWidget.swift
-    └── ProviderWidget.swift
+├── TokenStatsWidgets/           # WidgetKit (iOS + watchOS)
+│   ├── SummaryWidget.swift          # Home Screen: сводка всех провайдеров
+│   ├── ProviderWidget.swift         # Home Screen: один провайдер детально
+│   ├── LockScreenWidget.swift       # Lock Screen: % лимита или $ за сегодня
+│   └── LiveActivityView.swift       # Live Activity: при приближении к лимиту
+└── TokenStatsIntents/           # App Intents (Siri Shortcuts)
+    └── CheckUsageIntent.swift       # "Сколько токенов осталось?"
 ```
 
-### 2.2 Ключевые экраны
+### 2.2 iOS-приложение — ключевые экраны
 
-1. **Summary** — список провайдеров с цветовыми индикаторами (зелёный/жёлтый/красный)
+1. **Dashboard** — карточки провайдеров с прогресс-барами (RPM, TPM, бюджет), цветовая индикация (зелёный/жёлтый/красный)
+2. **Provider Detail** — графики usage/costs за день/неделю/месяц (Swift Charts), текущие rate limits
+3. **Settings** — управление ключами, выбор тиров, настройка порогов уведомлений
+4. **Notifications** — конфигурация: при каком % отправлять alert (80%, 95%, custom)
+
+### 2.3 iOS-виджеты (WidgetKit)
+
+| Виджет | Размер | Что показывает |
+|---|---|---|
+| Summary | Medium / Large | Все провайдеры: имя, % лимита, $ сегодня |
+| Provider | Small / Medium | Один провайдер: RPM%, TPM%, cost |
+| Lock Screen | Circular / Rectangular | % оставшегося лимита или $ сегодня |
+| Live Activity | Dynamic Island + Banner | Активируется при usage >80% — показывает countdown до лимита |
+
+- Обновление: WidgetKit timeline, интервал 15 минут
+- Background App Refresh для актуализации данных
+
+### 2.4 watchOS — ключевые экраны
+
+1. **Summary** — список провайдеров с цветовыми индикаторами
 2. **Provider Detail** — круговые прогресс-бары: RPM%, TPM%, бюджет%, стоимость сегодня
 3. **Complications** — на циферблате: оставшийся % лимита или $ за сегодня
 
-### 2.3 Настройка ключей (iOS companion)
+### 2.5 Настройка ключей (iOS)
 
 В SettingsView — пошаговая инструкция для каждого провайдера:
 - Anthropic: "Console → Admin API Keys → Create → выберите только Read scopes"
 - OpenAI: "Settings → API Keys → Create → выберите Read permissions"
 - Vertex AI: "GCP Console → IAM → Service Accounts → Create → добавьте Viewer роли → скачайте JSON"
 
-### 2.4 Обновление данных
+### 2.6 Обновление данных
 
 - WatchConnectivity для передачи настроек с iPhone
 - URLSession для прямых запросов к бэкенду с часов
@@ -255,60 +281,116 @@ garmin/
 
 ---
 
-## Фаза 4 — Wear OS (Kotlin, Jetpack Compose)
+## Фаза 4 — Android-приложение + Wear OS (Kotlin, Jetpack Compose)
 
 ### 4.1 Структура проекта
 
 ```
-wearos/
-├── app/src/main/
-│   ├── java/com/tokenstats/
-│   │   ├── MainActivity.kt
-│   │   ├── presentation/
-│   │   │   ├── SummaryScreen.kt
-│   │   │   ├── ProviderScreen.kt
-│   │   │   └── theme/Theme.kt
-│   │   ├── data/
-│   │   │   ├── ApiClient.kt
-│   │   │   └── TokenRepository.kt
-│   │   ├── tiles/
-│   │   │   └── SummaryTile.kt
-│   │   └── complications/
-│   │       └── UsageComplication.kt
-│   └── AndroidManifest.xml
+android/
+├── app/                          # Android phone app
+│   └── src/main/
+│       ├── java/com/tokenstats/
+│       │   ├── MainActivity.kt
+│       │   ├── ui/
+│       │   │   ├── dashboard/
+│       │   │   │   ├── DashboardScreen.kt      # Сводка провайдеров
+│       │   │   │   └── DashboardViewModel.kt
+│       │   │   ├── provider/
+│       │   │   │   ├── ProviderDetailScreen.kt  # Детали + графики
+│       │   │   │   └── ProviderViewModel.kt
+│       │   │   ├── settings/
+│       │   │   │   └── SettingsScreen.kt        # Управление ключами
+│       │   │   └── theme/Theme.kt
+│       │   ├── data/
+│       │   │   ├── ApiClient.kt
+│       │   │   ├── TokenRepository.kt
+│       │   │   └── EncryptedPrefs.kt
+│       │   ├── widget/
+│       │   │   ├── SummaryWidget.kt             # Glance: сводка
+│       │   │   ├── ProviderWidget.kt            # Glance: один провайдер
+│       │   │   └── WidgetUpdateWorker.kt
+│       │   └── notifications/
+│       │       └── LimitNotificationService.kt
+│       └── AndroidManifest.xml
+├── wear/                         # Wear OS app
+│   └── src/main/
+│       ├── java/com/tokenstats/wear/
+│       │   ├── MainActivity.kt
+│       │   ├── presentation/
+│       │   │   ├── SummaryScreen.kt
+│       │   │   ├── ProviderScreen.kt
+│       │   │   └── theme/Theme.kt
+│       │   ├── data/
+│       │   │   ├── ApiClient.kt
+│       │   │   └── TokenRepository.kt
+│       │   ├── tiles/
+│       │   │   └── SummaryTile.kt
+│       │   └── complications/
+│       │       └── UsageComplication.kt
+│       └── AndroidManifest.xml
+├── shared/                       # Shared module (models, API client)
+│   └── src/main/java/com/tokenstats/shared/
+│       ├── models/
+│       ├── api/
+│       └── utils/
 ├── build.gradle.kts
 └── settings.gradle.kts
 ```
 
-### 4.2 Возможности
+### 4.2 Android-приложение — ключевые экраны
+
+1. **Dashboard** — Material 3 карточки провайдеров, прогресс-бары, цветовая индикация
+2. **Provider Detail** — графики usage/costs (Vico charts), текущие rate limits
+3. **Settings** — управление ключами, выбор тиров, настройка порогов уведомлений
+
+### 4.3 Android-виджеты (Jetpack Glance)
+
+| Виджет | Размер | Что показывает |
+|---|---|---|
+| Summary | 4×2 / 4×3 | Все провайдеры: имя, % лимита, $ сегодня |
+| Provider | 2×2 / 4×1 | Один провайдер: RPM%, TPM%, cost |
+
+- Обновление: WorkManager, интервал 15 минут
+- Push через FCM при приближении к лимитам
+
+### 4.4 Wear OS — возможности
 
 - Tiles API для быстрого доступа
 - Complications для циферблата
 - WorkManager для фонового обновления
-- Push через FCM
+- Data Layer API для синхронизации с телефоном
 
 ---
 
 ## Порядок реализации
 
-### MVP (Фаза 1-2): ~3-4 недели
+### MVP (Фаза 1-2)
 1. Backend — FastAPI + Anthropic + OpenAI + SQLite + JWT auth + key validation
-2. Apple Watch — SwiftUI watchOS + iOS companion для настроек ключей
-3. Vertex AI провайдер
+2. iOS app — полноценный дашборд + настройка ключей
+3. Apple Watch — SwiftUI watchOS app
+4. Vertex AI провайдер
 
-### V1.1: +2 недели
-4. Complications/Widgets для Apple Watch
-5. Push-уведомления при приближении к лимитам
-6. Графики истории (Swift Charts)
+### V1.1
+5. iOS-виджеты — Home Screen, Lock Screen (WidgetKit)
+6. watchOS Complications
+7. Live Activity при приближении к лимитам
+8. Push-уведомления (APNs)
+9. Графики истории (Swift Charts)
 
-### V1.2: +2-3 недели
-7. Garmin Connect IQ widget
-8. Wear OS Kotlin app + Tile
+### V1.2
+10. Android app — Material 3 дашборд + настройка ключей
+11. Android-виджеты (Jetpack Glance)
+12. Wear OS app + Tiles + Complications
+13. Push-уведомления (FCM)
 
-### V2.0: будущее
-9. Дополнительные провайдеры (Mistral, xAI)
-10. Командные фичи (общий дашборд для организации)
-11. Прогнозирование расходов
+### V1.3
+14. Garmin Connect IQ widget
+
+### V2.0
+15. Дополнительные провайдеры (Mistral, xAI)
+16. Командные фичи (общий дашборд для организации)
+17. Прогнозирование расходов
+18. Siri Shortcuts / Google Assistant интеграция
 
 ---
 
@@ -319,10 +401,11 @@ wearos/
 | Backend | Python 3.12+, FastAPI 0.115+, Pydantic, SQLAlchemy |
 | DB | SQLite (dev) → PostgreSQL (prod) |
 | Cache | In-memory (cachetools) → Redis (prod) |
-| iOS app | Swift 5.9+, SwiftUI, Swift Charts, iOS 17+ |
+| iOS app | Swift 5.9+, SwiftUI, Swift Charts, WidgetKit, ActivityKit, iOS 17+ |
 | watchOS app | SwiftUI, WidgetKit, watchOS 10+ |
+| Android app | Kotlin, Jetpack Compose, Material 3, Jetpack Glance, Vico, Android 10+ |
+| Wear OS app | Kotlin, Jetpack Compose for Wear OS, Tiles, Wear OS 4+ |
 | Garmin | Monkey C, Connect IQ SDK 7+ |
-| Wear OS | Kotlin, Jetpack Compose for Wear OS, Wear OS 4+ |
 | Deploy | Docker, Fly.io / Railway |
 
 ## Безопасность
