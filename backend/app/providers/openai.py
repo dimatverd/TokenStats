@@ -1,6 +1,6 @@
 """OpenAI provider — Admin API key validation and data fetching."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import httpx
 
@@ -72,13 +72,15 @@ class OpenAIProvider(BaseProvider):
                 tpm_remaining = int(resp.headers.get("x-ratelimit-remaining-tokens", "0"))
 
                 if rpm_limit > 0:
-                    results.append(RateLimitInfo(
-                        model="organization",
-                        rpm_limit=rpm_limit,
-                        rpm_used=rpm_limit - rpm_remaining,
-                        tpm_limit=tpm_limit,
-                        tpm_used=tpm_limit - tpm_remaining,
-                    ))
+                    results.append(
+                        RateLimitInfo(
+                            model="organization",
+                            rpm_limit=rpm_limit,
+                            rpm_used=rpm_limit - rpm_remaining,
+                            tpm_limit=tpm_limit,
+                            tpm_used=tpm_limit - tpm_remaining,
+                        )
+                    )
             except httpx.RequestError:
                 pass
 
@@ -106,14 +108,16 @@ class OpenAIProvider(BaseProvider):
                 results = []
                 for bucket in data.get("data", []):
                     for result in bucket.get("results", []):
-                        results.append(UsageData(
-                            model=result.get("object", "unknown"),
-                            input_tokens=result.get("input_tokens", 0),
-                            output_tokens=result.get("output_tokens", 0),
-                            total_tokens=result.get("input_tokens", 0) + result.get("output_tokens", 0),
-                            period_start=start,
-                            period_end=now,
-                        ))
+                        results.append(
+                            UsageData(
+                                model=result.get("object", "unknown"),
+                                input_tokens=result.get("input_tokens", 0),
+                                output_tokens=result.get("output_tokens", 0),
+                                total_tokens=result.get("input_tokens", 0) + result.get("output_tokens", 0),
+                                period_start=start,
+                                period_end=now,
+                            )
+                        )
                 return results
             except (httpx.RequestError, KeyError, ValueError):
                 return []

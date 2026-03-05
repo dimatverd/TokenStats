@@ -1,7 +1,5 @@
 """TTL cache for provider data — swap for Redis in production."""
 
-from datetime import UTC, datetime
-
 from cachetools import TTLCache
 
 from app.config import settings

@@ -17,7 +17,6 @@ from app.auth.schemas import (
     RegisterResponse,
     TokenResponse,
 )
-from app.providers.registry import get_provider
 from app.auth.security import (
     create_access_token,
     create_refresh_token,
@@ -27,6 +26,7 @@ from app.auth.security import (
 )
 from app.config import settings
 from app.db import get_db
+from app.providers.registry import get_provider
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -95,7 +95,7 @@ async def refresh_token(body: dict, db: AsyncSession = Depends(get_db)):
     except (Exception, KeyError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
-    result = await db.execute(select(User).where(User.id == user_id, User.is_active == True))
+    result = await db.execute(select(User).where(User.id == user_id, User.is_active.is_(True)))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
@@ -120,7 +120,9 @@ async def add_provider(
     try:
         provider_type = ProviderType(body.provider)
     except ValueError:
-        raise HTTPException(status_code=422, detail=f"Invalid provider: {body.provider}. Must be: anthropic, openai, google")
+        raise HTTPException(
+            status_code=422, detail=f"Invalid provider: {body.provider}. Must be: anthropic, openai, google"
+        )
 
     # Anthropic requires tier
     if provider_type == ProviderType.ANTHROPIC and not body.tier:

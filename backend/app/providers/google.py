@@ -1,7 +1,6 @@
 """Google Vertex AI provider — Service Account JSON validation and data fetching."""
 
 import json
-from datetime import UTC, datetime
 
 import httpx
 from google.auth.transport.requests import Request as GoogleAuthRequest
@@ -74,7 +73,9 @@ class GoogleVertexProvider(BaseProvider):
                     params={"pageSize": 1},
                 )
                 if resp.status_code == 403:
-                    return KeyValidationResult(False, False, "Insufficient permissions: requires monitoring.viewer role")
+                    return KeyValidationResult(
+                        False, False, "Insufficient permissions: requires monitoring.viewer role"
+                    )
                 if resp.status_code == 401:
                     return KeyValidationResult(False, False, "Service Account authentication failed")
             except httpx.RequestError as e:
@@ -87,7 +88,9 @@ class GoogleVertexProvider(BaseProvider):
                     json={"displayName": "tokenstats-readonly-test"},
                 )
                 if resp.status_code in (200, 201):
-                    return KeyValidationResult(False, False, "Key is not read-only: write request succeeded. SA must have only viewer roles.")
+                    return KeyValidationResult(
+                        False, False, "Key is not read-only: write request succeeded. SA must have only viewer roles."
+                    )
             except httpx.RequestError:
                 pass
 
@@ -105,22 +108,18 @@ class GoogleVertexProvider(BaseProvider):
             return []
 
         project_id = sa["project_id"]
-        now = datetime.now(UTC)
 
         async with httpx.AsyncClient(timeout=15) as client:
             try:
                 # Query Vertex AI quota metrics
-                end = now.isoformat() + "Z"
-                start = (now.replace(minute=now.minute - 1 if now.minute > 0 else 59)).isoformat() + "Z"
-
                 resp = await client.post(
                     f"https://monitoring.googleapis.com/v3/projects/{project_id}/timeSeries:query",
                     headers={"Authorization": f"Bearer {creds.token}", "Content-Type": "application/json"},
                     json={
                         "query": (
-                            'fetch consumer_quota::serviceruntime.googleapis.com/quota/rate/net_usage'
-                            f' | filter resource.service == "aiplatform.googleapis.com"'
-                            f' | within 1m'
+                            "fetch consumer_quota::serviceruntime.googleapis.com/quota/rate/net_usage"
+                            ' | filter resource.service == "aiplatform.googleapis.com"'
+                            " | within 1m"
                         ),
                     },
                 )
@@ -134,13 +133,15 @@ class GoogleVertexProvider(BaseProvider):
                     model = labels.get("quota_metric", "vertex-ai")
                     points = ts.get("pointData", [])
                     used = int(points[0]["values"][0].get("int64Value", 0)) if points else 0
-                    results.append(RateLimitInfo(
-                        model=model,
-                        rpm_limit=60,  # default quota
-                        rpm_used=used,
-                        tpm_limit=0,
-                        tpm_used=0,
-                    ))
+                    results.append(
+                        RateLimitInfo(
+                            model=model,
+                            rpm_limit=60,  # default quota
+                            rpm_used=used,
+                            tpm_limit=0,
+                            tpm_used=0,
+                        )
+                    )
                 return results
             except (httpx.RequestError, KeyError, ValueError, IndexError):
                 return []
@@ -158,7 +159,7 @@ class GoogleVertexProvider(BaseProvider):
             return None
 
         try:
-            creds = _get_credentials(sa)
+            _get_credentials(sa)
         except Exception:
             return None
 
