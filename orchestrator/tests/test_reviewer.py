@@ -134,6 +134,6 @@ def test_format_review_for_workpad() -> None:
         confidence=0.9,
     )
     text = format_review_for_workpad(review, ReviewVerdict.APPROVE, "Looks good")
-    assert "Codex o3" in text
+    assert "Codex CLI" in text
     assert "APPROVE" in text.lower() or "approve" in text
     assert "Could use better naming" in text

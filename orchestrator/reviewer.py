@@ -1,19 +1,35 @@
 """Codex code review integration.
 
-Uses OpenAI API (o3 via Plus subscription) to perform code review on PRs.
+Uses Codex CLI (codex exec) to perform code review on PRs.
+Runs on ChatGPT Plus subscription tokens — no separate API billing.
 The orchestrator (Claude as CTO) evaluates Codex findings and makes decisions.
 """
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
-from openai import OpenAI
-
 from orchestrator.config import ReviewConfig
+
+# Codex CLI binary — check common install locations
+_CODEX_PATHS = [
+    "codex",
+    "/tmp/node-v22.14.0-darwin-arm64/bin/codex",
+]
+
+
+def _find_codex() -> str:
+    """Find codex binary on PATH or known locations."""
+    for p in _CODEX_PATHS:
+        if shutil.which(p):
+            return p
+        if Path(p).exists():
+            return p
+    raise FileNotFoundError("codex CLI not found. Install: npm install -g @openai/codex")
 
 
 class ReviewVerdict(Enum):
@@ -41,7 +57,7 @@ class CodexReviewResult:
     confidence: float = 0.0
 
 
-REVIEW_SYSTEM_PROMPT = """\
+REVIEW_PROMPT = """\
 You are a senior code reviewer. Review the provided git diff carefully.
 
 Analyze for:
@@ -67,7 +83,13 @@ FINDINGS:
 
 If there are no findings, write FINDINGS: none
 
-Focus on substance. Ignore formatting nitpicks unless they affect readability significantly.\
+Focus on substance. Ignore formatting nitpicks unless they affect readability significantly.
+
+Here is the diff:
+
+```diff
+{diff}
+```\
 """
 
 
@@ -160,7 +182,7 @@ def _parse_summary(text: str) -> str:
     return ""
 
 
-MAX_DIFF_CHARS = 60_000  # ~15k tokens, safe for o3 context
+MAX_DIFF_CHARS = 60_000
 
 
 def run_codex_review(
@@ -168,10 +190,9 @@ def run_codex_review(
     review_config: ReviewConfig,
     issue_title: str = "",
 ) -> CodexReviewResult:
-    """Send diff to OpenAI Codex (o3) for code review.
+    """Run code review via Codex CLI (uses ChatGPT Plus subscription tokens).
 
-    Uses OPENAI_API_KEY env var for auth (Plus subscription tokens).
-    Truncates large diffs to avoid context limits.
+    Calls `codex exec --full-auto` with the review prompt.
     """
     if not diff.strip():
         return CodexReviewResult(
@@ -180,24 +201,36 @@ def run_codex_review(
             confidence=1.0,
         )
 
-    # Truncate large diffs
     truncated = False
     if len(diff) > MAX_DIFF_CHARS:
         diff = diff[:MAX_DIFF_CHARS] + "\n... [truncated]"
         truncated = True
 
-    client = OpenAI()  # Uses OPENAI_API_KEY env var
-
-    user_prompt = f"PR: {issue_title}\n\n```diff\n{diff}\n```" if issue_title else f"```diff\n{diff}\n```"
+    prompt = REVIEW_PROMPT.format(diff=diff)
+    if issue_title:
+        prompt = f"PR: {issue_title}\n\n" + prompt
 
     try:
-        response = client.chat.completions.create(
-            model=review_config.model,
-            max_completion_tokens=review_config.max_tokens,
-            messages=[
-                {"role": "system", "content": REVIEW_SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
+        codex_bin = _find_codex()
+        result = subprocess.run(
+            [codex_bin, "exec", "--full-auto", prompt],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        raw = result.stdout.strip()
+    except FileNotFoundError as exc:
+        return CodexReviewResult(
+            verdict=ReviewVerdict.NEEDS_HUMAN_REVIEW,
+            summary=f"Codex CLI not found: {exc}",
+            confidence=0.0,
+            raw_response=str(exc),
+        )
+    except subprocess.TimeoutExpired:
+        return CodexReviewResult(
+            verdict=ReviewVerdict.NEEDS_HUMAN_REVIEW,
+            summary="Codex review timed out (120s)",
+            confidence=0.0,
         )
     except Exception as exc:
         return CodexReviewResult(
@@ -207,9 +240,7 @@ def run_codex_review(
             raw_response=str(exc),
         )
 
-    raw = response.choices[0].message.content or ""
-
-    result = CodexReviewResult(
+    review = CodexReviewResult(
         verdict=_parse_verdict(raw),
         summary=_parse_summary(raw),
         findings=_parse_findings(raw),
@@ -218,15 +249,15 @@ def run_codex_review(
     )
 
     if truncated:
-        result = CodexReviewResult(
-            verdict=result.verdict,
-            summary=result.summary + " (diff was truncated)",
-            findings=result.findings,
-            raw_response=result.raw_response,
-            confidence=max(result.confidence - 0.1, 0.0),
+        review = CodexReviewResult(
+            verdict=review.verdict,
+            summary=review.summary + " (diff was truncated)",
+            findings=review.findings,
+            raw_response=review.raw_response,
+            confidence=max(review.confidence - 0.1, 0.0),
         )
 
-    return result
+    return review
 
 
 def cto_evaluate(
@@ -241,11 +272,9 @@ def cto_evaluate(
     - If critical/major findings → REQUEST_CHANGES
     - Otherwise → trust Codex verdict
     """
-    # No findings, high confidence → approve
     if not review.findings and review.confidence >= review_config.auto_approve_threshold:
         return ReviewVerdict.APPROVE, "Codex review passed. No issues found."
 
-    # Check for categories that require human review
     escalation_categories = set(review_config.require_human_review_labels)
     for finding in review.findings:
         if finding.category in escalation_categories:
@@ -254,24 +283,21 @@ def cto_evaluate(
                 f"Escalating to human: {finding.category} finding in {finding.file} — {finding.description}",
             )
 
-    # Critical or major findings → request changes
     critical = [f for f in review.findings if f.severity in ("critical", "major")]
     if critical:
         descriptions = "; ".join(f"[{f.severity}] {f.file}: {f.description}" for f in critical[:3])
         return ReviewVerdict.REQUEST_CHANGES, f"Codex found issues: {descriptions}"
 
-    # High confidence approve with only minor/suggestion findings
     if review.verdict == ReviewVerdict.APPROVE and review.confidence >= review_config.auto_approve_threshold:
         return ReviewVerdict.APPROVE, f"Codex approved with {len(review.findings)} minor notes."
 
-    # Default: trust Codex
     return review.verdict, review.summary
 
 
 def format_review_for_workpad(review: CodexReviewResult, cto_verdict: ReviewVerdict, cto_reason: str) -> str:
     """Format review results for the Linear workpad comment."""
     lines = [
-        "### Code Review (Codex o3)",
+        "### Code Review (Codex CLI)",
         f"**Codex verdict**: {review.verdict.value} (confidence: {review.confidence:.0%})",
         f"**CTO decision**: {cto_verdict.value}",
         f"**Reason**: {cto_reason}",
