@@ -1,8 +1,28 @@
 """Response schemas for API v1 endpoints."""
 
+import enum
 from datetime import datetime
 
 from pydantic import BaseModel
+
+
+class PlatformEnum(str, enum.Enum):
+    IOS = "ios"
+    ANDROID = "android"
+    WATCHOS = "watchos"
+    WEAROS = "wearos"
+
+
+class DeviceRegisterRequest(BaseModel):
+    device_token: str
+    platform: PlatformEnum
+
+
+class DeviceRegisterResponse(BaseModel):
+    id: int
+    device_token: str
+    platform: PlatformEnum
+    created_at: datetime
 
 
 class RateLimitResponse(BaseModel):
@@ -58,3 +78,15 @@ class CompactProvider(BaseModel):
 
 class CompactSummaryResponse(BaseModel):
     p: list[CompactProvider]
+
+
+class HistoryPointSchema(BaseModel):
+    timestamp: datetime
+    rpm_pct: float
+    tpm_pct: float
+    cost_usd: float
+
+
+class HistoryResponse(BaseModel):
+    provider: str
+    points: list[HistoryPointSchema]

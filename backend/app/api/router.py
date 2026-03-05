@@ -8,14 +8,18 @@ from app.api.schemas import (
     CompactProvider,
     CompactSummaryResponse,
     CostResponse,
+    DeviceRegisterRequest,
+    DeviceRegisterResponse,
+    HistoryPointSchema,
+    HistoryResponse,
     ProviderSummary,
     RateLimitResponse,
     SummaryResponse,
     UsageResponse,
 )
 from app.auth.dependencies import get_current_user
-from app.auth.models import APIKeyStore, ProviderType, User
-from app.cache import get_cached_costs, get_cached_rate_limits, get_cached_snapshot, get_cached_usage
+from app.auth.models import APIKeyStore, DeviceRegistration, PlatformType, ProviderType, User
+from app.cache import get_cached_costs, get_cached_rate_limits, get_cached_snapshot, get_cached_usage, get_history
 from app.db import get_db
 
 router = APIRouter(prefix="/api/v1", tags=["api"])
@@ -208,3 +212,95 @@ async def get_costs(
         period_end=cached.period_end,
         breakdown=cached.breakdown,
     )
+
+
+@router.get("/history/{provider}", response_model=HistoryResponse)
+async def get_provider_history(
+    provider: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    provider = _validate_provider(provider)
+    await _ensure_user_has_provider(user, provider, db)
+
+    points = get_history(user.id, provider)
+    return HistoryResponse(
+        provider=provider,
+        points=[
+            HistoryPointSchema(
+                timestamp=p.timestamp,
+                rpm_pct=round(p.rpm_pct, 1),
+                tpm_pct=round(p.tpm_pct, 1),
+                cost_usd=round(p.cost_usd, 4),
+            )
+            for p in points
+        ],
+    )
+
+
+# ── Device Registration ──────────────────────────────────
+
+
+@router.post("/devices/register", response_model=DeviceRegisterResponse, status_code=201)
+async def register_device(
+    body: DeviceRegisterRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Register a device for push notifications. Upserts on duplicate (user_id, device_token)."""
+    platform = PlatformType(body.platform.value)
+
+    # Check for existing registration
+    result = await db.execute(
+        select(DeviceRegistration).where(
+            DeviceRegistration.user_id == user.id,
+            DeviceRegistration.device_token == body.device_token,
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.platform = platform
+        await db.commit()
+        await db.refresh(existing)
+        return DeviceRegisterResponse(
+            id=existing.id,
+            device_token=existing.device_token,
+            platform=existing.platform.value,
+            created_at=existing.created_at,
+        )
+
+    device = DeviceRegistration(
+        user_id=user.id,
+        device_token=body.device_token,
+        platform=platform,
+    )
+    db.add(device)
+    await db.commit()
+    await db.refresh(device)
+    return DeviceRegisterResponse(
+        id=device.id,
+        device_token=device.device_token,
+        platform=device.platform.value,
+        created_at=device.created_at,
+    )
+
+
+@router.delete("/devices/{device_token}", status_code=204)
+async def unregister_device(
+    device_token: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unregister a device from push notifications."""
+    result = await db.execute(
+        select(DeviceRegistration).where(
+            DeviceRegistration.user_id == user.id,
+            DeviceRegistration.device_token == device_token,
+        )
+    )
+    device = result.scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    await db.delete(device)
+    await db.commit()

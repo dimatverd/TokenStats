@@ -8,7 +8,14 @@ from sqlalchemy import select
 
 from app.auth.encryption import decrypt_key
 from app.auth.models import APIKeyStore
-from app.cache import set_cached_costs, set_cached_rate_limits, set_cached_snapshot, set_cached_usage
+from app.cache import (
+    HistoryPoint,
+    append_history_point,
+    set_cached_costs,
+    set_cached_rate_limits,
+    set_cached_snapshot,
+    set_cached_usage,
+)
 from app.config import settings
 from app.db import async_session
 from app.providers.base import ProviderSnapshot
@@ -75,6 +82,16 @@ async def _poll_user_provider(record: APIKeyStore, fetch_rate_limits=True, fetch
         fetched_at=now,
     )
     set_cached_snapshot(record.user_id, record.provider.value, snapshot)
+
+    # Record history point for charts
+    rpm_pct = max((rl.rpm_pct for rl in rate_limits), default=0.0)
+    tpm_pct = max((rl.tpm_pct for rl in rate_limits), default=0.0)
+    cost_usd = costs.total_usd if costs else 0.0
+    append_history_point(
+        record.user_id,
+        record.provider.value,
+        HistoryPoint(timestamp=now, rpm_pct=rpm_pct, tpm_pct=tpm_pct, cost_usd=cost_usd),
+    )
 
     logger.info(
         "Polled user=%s provider=%s: %d rate_limits, %d usage, costs=%s, stale=%s",

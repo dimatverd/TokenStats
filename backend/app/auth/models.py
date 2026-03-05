@@ -38,6 +38,13 @@ class User(Base):
     api_keys = relationship("APIKeyStore", back_populates="user", cascade="all, delete-orphan")
 
 
+class PlatformType(str, enum.Enum):
+    IOS = "ios"
+    ANDROID = "android"
+    WATCHOS = "watchos"
+    WEAROS = "wearos"
+
+
 class ProviderType(str, enum.Enum):
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
@@ -60,3 +67,14 @@ class APIKeyStore(Base):
     created_at = Column(DateTime, default=_utcnow, nullable=False)
 
     user = relationship("User", back_populates="api_keys")
+
+
+class DeviceRegistration(Base):
+    __tablename__ = "device_registrations"
+    __table_args__ = (UniqueConstraint("user_id", "device_token", name="uq_user_device_token"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    device_token = Column(String(512), nullable=False)
+    platform = Column(SAEnum(PlatformType), nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)

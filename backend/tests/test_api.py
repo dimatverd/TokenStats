@@ -6,6 +6,8 @@ import pytest
 from httpx import AsyncClient
 
 from app.cache import (
+    HistoryPoint,
+    append_history_point,
     clear_all,
     set_cached_costs,
     set_cached_rate_limits,
@@ -305,4 +307,56 @@ async def test_summary_requires_auth(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_limits_requires_auth(client: AsyncClient):
     resp = await client.get("/api/v1/limits/anthropic")
+    assert resp.status_code == 403
+
+
+# ── History ──────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_history_empty(client: AsyncClient):
+    """History endpoint returns empty list when no data points exist."""
+    headers = await _auth_headers(client)
+    await _add_provider(client, headers)
+    resp = await client.get("/api/v1/history/anthropic", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["provider"] == "anthropic"
+    assert data["points"] == []
+
+
+@pytest.mark.asyncio
+async def test_history_with_points(client: AsyncClient):
+    """History endpoint returns stored data points."""
+    headers = await _auth_headers(client)
+    user_id = await _add_provider(client, headers)
+
+    now = datetime.now(UTC)
+    for i in range(3):
+        append_history_point(
+            user_id,
+            "anthropic",
+            HistoryPoint(timestamp=now, rpm_pct=10.0 + i, tpm_pct=20.0 + i, cost_usd=1.5 + i),
+        )
+
+    resp = await client.get("/api/v1/history/anthropic", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["points"]) == 3
+    assert data["points"][0]["rpm_pct"] == 10.0
+    assert data["points"][2]["cost_usd"] == 3.5
+
+
+@pytest.mark.asyncio
+async def test_history_unknown_provider(client: AsyncClient):
+    """History endpoint returns 404 for unknown provider."""
+    headers = await _auth_headers(client)
+    resp = await client.get("/api/v1/history/invalid", headers=headers)
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_history_requires_auth(client: AsyncClient):
+    """History endpoint requires authentication."""
+    resp = await client.get("/api/v1/history/anthropic")
     assert resp.status_code == 403

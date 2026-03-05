@@ -1,0 +1,17 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - FERNET_KEY=${FERNET_KEY:?Set FERNET_KEY in .env or environment}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env or environment}
+      - DATABASE_URL=sqlite+aiosqlite:///./data/tokenstats.db
+    volumes:
+      - tokenstats-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  tokenstats-data:
