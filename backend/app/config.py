@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     CACHE_TTL_USAGE: int = 300
     CACHE_TTL_COSTS: int = 300
 
+    # APNs push notifications (all optional — notifications disabled when empty)
+    APNS_TEAM_ID: str = ""
+    APNS_KEY_ID: str = ""
+    APNS_PRIVATE_KEY: str = ""
+    APNS_USE_SANDBOX: bool = True
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

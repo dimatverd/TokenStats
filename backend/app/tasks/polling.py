@@ -18,6 +18,7 @@ from app.cache import (
 )
 from app.config import settings
 from app.db import async_session
+from app.notifications.service import check_and_notify
 from app.providers.base import ProviderSnapshot
 from app.providers.registry import get_provider
 
@@ -82,6 +83,17 @@ async def _poll_user_provider(record: APIKeyStore, fetch_rate_limits=True, fetch
         fetched_at=now,
     )
     set_cached_snapshot(record.user_id, record.provider.value, snapshot)
+
+    # Check thresholds and send push notifications
+    try:
+        await check_and_notify(record.user_id, record.provider.value, snapshot)
+    except Exception as e:
+        logger.warning(
+            "Notification check failed for user=%s provider=%s: %s",
+            record.user_id,
+            record.provider.value,
+            e,
+        )
 
     # Record history point for charts
     rpm_pct = max((rl.rpm_pct for rl in rate_limits), default=0.0)

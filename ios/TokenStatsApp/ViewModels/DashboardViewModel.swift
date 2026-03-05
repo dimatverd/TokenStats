@@ -16,10 +16,21 @@ final class DashboardViewModel: ObservableObject {
             let summary = try await APIClient.shared.getSummary()
             providers = summary.providers
             updatedAt = summary.updatedAt
+            evaluateLiveActivities()
         } catch {
             self.error = error.localizedDescription
         }
         isLoading = false
+    }
+
+    /// Evaluates all providers and starts/updates/ends Live Activities
+    /// for any that cross the 80% usage threshold.
+    private func evaluateLiveActivities() {
+        guard #available(iOS 16.1, *) else { return }
+        let manager = LiveActivityManager.shared
+        for provider in providers {
+            manager.evaluateProvider(provider)
+        }
     }
 
     func startAutoRefresh(interval: TimeInterval = 30) {

@@ -112,6 +112,28 @@ struct SummaryResponse: Codable {
     }
 }
 
+// MARK: - History
+
+struct HistoryPoint: Codable, Identifiable {
+    var id: Date { timestamp }
+    let timestamp: Date
+    let rpmPct: Double
+    let tpmPct: Double
+    let costUsd: Double
+
+    enum CodingKeys: String, CodingKey {
+        case timestamp
+        case rpmPct = "rpm_pct"
+        case tpmPct = "tpm_pct"
+        case costUsd = "cost_usd"
+    }
+}
+
+struct HistoryResponse: Codable {
+    let provider: String
+    let points: [HistoryPoint]
+}
+
 // Helper for decoding arbitrary JSON values in breakdown
 enum AnyCodableValue: Codable {
     case string(String)
