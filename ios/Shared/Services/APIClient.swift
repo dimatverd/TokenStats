@@ -82,6 +82,10 @@ actor APIClient {
         try await get("/api/v1/costs/\(provider)")
     }
 
+    func getHistory(provider: String) async throws -> HistoryResponse {
+        try await get("/api/v1/history/\(provider)")
+    }
+
     func addProvider(provider: String, apiKey: String, tier: String?, label: String?) async throws {
         let body = AddProviderRequest(provider: provider, apiKey: apiKey, tier: tier, label: label)
         let _: EmptyResponse = try await post("/auth/providers", body: body, auth: true)

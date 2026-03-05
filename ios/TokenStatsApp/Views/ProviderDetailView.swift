@@ -22,6 +22,12 @@ struct ProviderDetailView: View {
                 }
             }
 
+            if let history = vm.history, !history.points.isEmpty {
+                Section("History") {
+                    HistoryChartView(history: history)
+                }
+            }
+
             if !vm.usage.isEmpty {
                 Section("Token Usage") {
                     UsageChartView(usage: vm.usage)

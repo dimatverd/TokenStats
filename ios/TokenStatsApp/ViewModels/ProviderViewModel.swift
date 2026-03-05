@@ -8,6 +8,7 @@ final class ProviderViewModel: ObservableObject {
     @Published var limits: [RateLimitMetric] = []
     @Published var usage: [UsageMetric] = []
     @Published var costs: CostMetric?
+    @Published var history: HistoryResponse?
     @Published var isLoading = false
     @Published var error: String?
 
@@ -23,10 +24,12 @@ final class ProviderViewModel: ObservableObject {
             async let limitsReq = APIClient.shared.getLimits(provider: providerId)
             async let usageReq = APIClient.shared.getUsage(provider: providerId)
             async let costsReq = APIClient.shared.getCosts(provider: providerId)
+            async let historyReq = APIClient.shared.getHistory(provider: providerId)
 
             limits = try await limitsReq
             usage = try await usageReq
             costs = try await costsReq
+            history = try await historyReq
         } catch {
             self.error = error.localizedDescription
         }

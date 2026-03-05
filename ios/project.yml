@@ -23,7 +23,23 @@ targets:
         INFOPLIST_FILE: TokenStatsApp/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.tokenstats.app
     dependencies:
+      - target: TokenStatsWidgets
       - target: TokenStatsWatch
+
+  TokenStatsWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: TokenStatsWidgets
+      - path: Shared
+    settings:
+      base:
+        INFOPLIST_FILE: TokenStatsWidgets/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.tokenstats.app.widgets
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
+    entitlements:
+      path: TokenStatsWidgets/TokenStatsWidgets.entitlements
+    dependencies: []
 
   TokenStatsWatch:
     type: application
