@@ -117,6 +117,11 @@ async def refresh_token(body: RefreshTokenRequest, db: AsyncSession = Depends(ge
     )
 
 
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(_: User = Depends(get_current_user)):
+    """Invalidate session — client must discard stored tokens."""
+
+
 # ── Provider key management ──────────────────────────────
 
 

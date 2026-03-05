@@ -309,11 +309,16 @@ async def test_refresh_token_missing_field(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_refresh_token_expired(client: AsyncClient):
+async def test_refresh_invalid_token(client: AsyncClient):
+    """US-03: garbage refresh token → 401."""
+    resp = await client.post("/auth/token", json={"refresh_token": "not.a.token"})
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_refresh_expired_token(client: AsyncClient):
     """US-03: expired refresh token → 401."""
     from datetime import datetime, timedelta, timezone
-
-    from jose import jwt
 
     payload = {
         "sub": "1",
@@ -323,13 +328,6 @@ async def test_refresh_token_expired(client: AsyncClient):
     }
     expired = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     resp = await client.post("/auth/token", json={"refresh_token": expired})
-    assert resp.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_refresh_garbage_token_rejected(client: AsyncClient):
-    """US-03: garbage string as refresh token → 401."""
-    resp = await client.post("/auth/token", json={"refresh_token": "not.a.valid.token"})
     assert resp.status_code == 401
 
 
@@ -351,4 +349,29 @@ async def test_refresh_inactive_user_rejected(client: AsyncClient):
         break
 
     resp = await client.post("/auth/token", json={"refresh_token": tokens["refresh_token"]})
+    assert resp.status_code == 401
+
+
+# ── US-03: Logout ────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_logout_success(client: AsyncClient):
+    """US-03: authenticated logout → 204."""
+    tokens = await _register_and_login(client)
+    resp = await client.post("/auth/logout", headers={"Authorization": f"Bearer {tokens['access_token']}"})
+    assert resp.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_logout_no_token(client: AsyncClient):
+    """US-03: logout without token → 403."""
+    resp = await client.post("/auth/logout")
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_logout_invalid_token(client: AsyncClient):
+    """US-03: logout with invalid token → 401."""
+    resp = await client.post("/auth/logout", headers={"Authorization": "Bearer garbage.token.here"})
     assert resp.status_code == 401
