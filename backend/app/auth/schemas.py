@@ -32,6 +32,10 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
 class ErrorResponse(BaseModel):
     detail: str
     code: str | None = None

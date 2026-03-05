@@ -255,3 +255,72 @@ async def test_refresh_with_access_token_rejected(client: AsyncClient):
         },
     )
     assert resp.status_code == 401
+
+
+# ── US-03: Access token auto-refresh via refresh token ──
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_rotation(client: AsyncClient):
+    """US-03: after refresh, new refresh token is different from old one."""
+    tokens = await _register_and_login(client)
+    resp = await client.post("/auth/token", json={"refresh_token": tokens["refresh_token"]})
+    assert resp.status_code == 200
+    new_tokens = resp.json()
+    assert new_tokens["refresh_token"] != tokens["refresh_token"]
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_replay_rejected(client: AsyncClient):
+    """US-03: replaying an already-used refresh token → 401."""
+    tokens = await _register_and_login(client)
+    old_refresh = tokens["refresh_token"]
+
+    # First use — succeeds
+    resp = await client.post("/auth/token", json={"refresh_token": old_refresh})
+    assert resp.status_code == 200
+
+    # Second use of same token — must be rejected
+    resp2 = await client.post("/auth/token", json={"refresh_token": old_refresh})
+    assert resp2.status_code == 401
+    assert "already used" in resp2.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_refresh_chain_works(client: AsyncClient):
+    """US-03: multiple sequential refreshes each succeed with the latest token."""
+    tokens = await _register_and_login(client)
+
+    for _ in range(3):
+        resp = await client.post("/auth/token", json={"refresh_token": tokens["refresh_token"]})
+        assert resp.status_code == 200
+        tokens = resp.json()
+
+    # Final access token must still work
+    resp = await client.get("/auth/me", headers={"Authorization": f"Bearer {tokens['access_token']}"})
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_missing_field(client: AsyncClient):
+    """US-03: missing refresh_token field → 422."""
+    resp = await client.post("/auth/token", json={})
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_expired(client: AsyncClient):
+    """US-03: expired refresh token → 401."""
+    from datetime import datetime, timedelta, timezone
+
+    from jose import jwt
+
+    payload = {
+        "sub": "1",
+        "type": "refresh",
+        "exp": datetime.now(timezone.utc) - timedelta(days=1),
+        "jti": "test-jti",
+    }
+    expired = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    resp = await client.post("/auth/token", json={"refresh_token": expired})
+    assert resp.status_code == 401

@@ -1,5 +1,6 @@
 """JWT token creation/verification and password hashing."""
 
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -24,7 +25,7 @@ def create_access_token(user_id: int) -> str:
 
 def create_refresh_token(user_id: int) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
-    payload = {"sub": str(user_id), "type": "refresh", "exp": expire}
+    payload = {"sub": str(user_id), "type": "refresh", "exp": expire, "jti": str(uuid.uuid4())}
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
