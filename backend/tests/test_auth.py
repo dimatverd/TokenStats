@@ -324,3 +324,31 @@ async def test_refresh_token_expired(client: AsyncClient):
     expired = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     resp = await client.post("/auth/token", json={"refresh_token": expired})
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_refresh_garbage_token_rejected(client: AsyncClient):
+    """US-03: garbage string as refresh token → 401."""
+    resp = await client.post("/auth/token", json={"refresh_token": "not.a.valid.token"})
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_refresh_inactive_user_rejected(client: AsyncClient):
+    """US-03: refresh token for inactive/deleted user → 401."""
+    from sqlalchemy import update
+
+    from app.auth.models import User
+    from app.db import get_db
+    from app.main import app as fastapi_app
+
+    tokens = await _register_and_login(client)
+
+    db_override = fastapi_app.dependency_overrides[get_db]
+    async for session in db_override():
+        await session.execute(update(User).values(is_active=False))
+        await session.commit()
+        break
+
+    resp = await client.post("/auth/token", json={"refresh_token": tokens["refresh_token"]})
+    assert resp.status_code == 401
