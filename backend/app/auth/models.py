@@ -1,10 +1,10 @@
 """SQLAlchemy models for authentication."""
 
+import enum
 from datetime import UTC, datetime
 
-import enum
-
-from sqlalchemy import Boolean, Column, DateTime, Enum as SAEnum, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship
 
 from app.db import Base
@@ -35,9 +35,7 @@ class ProviderType(str, enum.Enum):
 
 class APIKeyStore(Base):
     __tablename__ = "api_keys"
-    __table_args__ = (
-        UniqueConstraint("user_id", "provider", name="uq_user_provider"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "provider", name="uq_user_provider"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)

@@ -1,6 +1,6 @@
 """Tests for cache layer — US-10 acceptance criteria."""
 
-import time
+from datetime import UTC, datetime
 
 import pytest
 
@@ -17,7 +17,6 @@ from app.cache import (
     set_cached_usage,
 )
 from app.providers.base import CostData, ProviderSnapshot, RateLimitInfo, UsageData
-from datetime import UTC, datetime
 
 
 @pytest.fixture(autouse=True)
@@ -46,7 +45,9 @@ def test_rate_limits_cache_miss():
 def test_usage_cache():
     """US-10: usage data cached and retrieved."""
     now = datetime.now(UTC)
-    data = [UsageData(model="gpt-4", input_tokens=100, output_tokens=50, total_tokens=150, period_start=now, period_end=now)]
+    data = [
+        UsageData(model="gpt-4", input_tokens=100, output_tokens=50, total_tokens=150, period_start=now, period_end=now)
+    ]
     set_cached_usage(1, "openai", data)
     result = get_cached_usage(1, "openai")
     assert result is not None
@@ -102,7 +103,11 @@ def test_cache_isolation_between_users():
 
 def test_cache_isolation_between_providers():
     """Different providers have separate cache entries."""
-    set_cached_rate_limits(1, "openai", [RateLimitInfo(model="gpt-4", rpm_limit=100, rpm_used=0, tpm_limit=50000, tpm_used=0)])
-    set_cached_rate_limits(1, "anthropic", [RateLimitInfo(model="claude", rpm_limit=50, rpm_used=0, tpm_limit=40000, tpm_used=0)])
+    set_cached_rate_limits(
+        1, "openai", [RateLimitInfo(model="gpt-4", rpm_limit=100, rpm_used=0, tpm_limit=50000, tpm_used=0)]
+    )
+    set_cached_rate_limits(
+        1, "anthropic", [RateLimitInfo(model="claude", rpm_limit=50, rpm_used=0, tpm_limit=40000, tpm_used=0)]
+    )
     assert get_cached_rate_limits(1, "openai")[0].rpm_limit == 100
     assert get_cached_rate_limits(1, "anthropic")[0].rpm_limit == 50

@@ -6,7 +6,6 @@ import os
 os.environ["FERNET_KEY"] = "bbxbYWRWGXW4RgXpyiu7Qo6C4bEV2ApAyJyw_gyV3no="
 os.environ["JWT_SECRET_KEY"] = "test-secret-key"
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine

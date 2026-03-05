@@ -15,6 +15,7 @@ class KeyValidationResult:
 @dataclass
 class RateLimitInfo:
     """Rate limit data for a single model."""
+
     model: str
     rpm_limit: int  # requests per minute
     rpm_used: int
@@ -35,6 +36,7 @@ class RateLimitInfo:
 @dataclass
 class UsageData:
     """Token usage for a time period."""
+
     model: str
     input_tokens: int
     output_tokens: int
@@ -46,6 +48,7 @@ class UsageData:
 @dataclass
 class CostData:
     """Cost data for a time period."""
+
     total_usd: float
     period_start: datetime
     period_end: datetime
@@ -55,6 +58,7 @@ class CostData:
 @dataclass
 class ProviderSnapshot:
     """Complete snapshot of provider data from a single poll."""
+
     provider: str
     rate_limits: list[RateLimitInfo]
     usage: list[UsageData]

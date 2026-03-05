@@ -1,6 +1,6 @@
 """Fernet encryption for API keys — keys never stored in plaintext."""
 
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet
 
 from app.config import settings
 

@@ -1,7 +1,5 @@
 """Anthropic provider — Admin API key validation and data fetching."""
 
-from datetime import UTC, datetime
-
 import httpx
 
 from app.providers.base import (
@@ -58,7 +56,11 @@ class AnthropicProvider(BaseProvider):
                 resp = await client.post(
                     f"{self.ADMIN_API_BASE}/messages",
                     headers={**self._headers(api_key), "content-type": "application/json"},
-                    json={"model": "claude-3-haiku-20240307", "max_tokens": 1, "messages": [{"role": "user", "content": "test"}]},
+                    json={
+                        "model": "claude-3-haiku-20240307",
+                        "max_tokens": 1,
+                        "messages": [{"role": "user", "content": "test"}],
+                    },
                 )
                 if resp.status_code == 200:
                     return KeyValidationResult(False, False, "Key is not read-only: inference request succeeded")
@@ -97,12 +99,10 @@ class AnthropicProvider(BaseProvider):
         ]
 
     async def get_usage(self, api_key: str, **kwargs) -> list[UsageData]:
-        now = datetime.now(UTC)
         # Anthropic Admin API doesn't have a direct usage endpoint yet
         # Return empty — will be populated when API supports it
         return []
 
     async def get_costs(self, api_key: str, **kwargs) -> CostData | None:
-        now = datetime.now(UTC)
         # Anthropic Admin API doesn't have a direct billing endpoint yet
         return None

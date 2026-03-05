@@ -10,9 +10,13 @@ from app.providers.base import KeyValidationResult
 
 async def _get_auth_headers(client: AsyncClient) -> dict:
     """Register + login, return auth headers."""
-    resp = await client.post("/auth/register", json={
-        "email": "dev@example.com", "password": "securepass123",
-    })
+    resp = await client.post(
+        "/auth/register",
+        json={
+            "email": "dev@example.com",
+            "password": "securepass123",
+        },
+    )
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -41,12 +45,16 @@ async def test_add_anthropic_key_success(mock_get, client: AsyncClient):
     mock_get.return_value = provider
 
     headers = await _get_auth_headers(client)
-    resp = await client.post("/auth/providers", json={
-        "provider": "anthropic",
-        "api_key": "sk-ant-admin-xxxxxxxxxxxxxxxxxxxx",
-        "tier": "tier2",
-        "label": "My Claude key",
-    }, headers=headers)
+    resp = await client.post(
+        "/auth/providers",
+        json={
+            "provider": "anthropic",
+            "api_key": "sk-ant-admin-xxxxxxxxxxxxxxxxxxxx",
+            "tier": "tier2",
+            "label": "My Claude key",
+        },
+        headers=headers,
+    )
     assert resp.status_code == 201
     data = resp.json()
     assert data["provider"] == "anthropic"
@@ -60,10 +68,14 @@ async def test_add_anthropic_key_success(mock_get, client: AsyncClient):
 async def test_add_anthropic_key_no_tier(client: AsyncClient):
     """US-04: Anthropic without tier → 422."""
     headers = await _get_auth_headers(client)
-    resp = await client.post("/auth/providers", json={
-        "provider": "anthropic",
-        "api_key": "sk-ant-admin-xxxxxxxxxxxxxxxxxxxx",
-    }, headers=headers)
+    resp = await client.post(
+        "/auth/providers",
+        json={
+            "provider": "anthropic",
+            "api_key": "sk-ant-admin-xxxxxxxxxxxxxxxxxxxx",
+        },
+        headers=headers,
+    )
     assert resp.status_code == 422
     assert "tier" in resp.json()["detail"].lower()
 
@@ -77,11 +89,15 @@ async def test_add_anthropic_key_invalid(mock_get, client: AsyncClient):
     mock_get.return_value = provider
 
     headers = await _get_auth_headers(client)
-    resp = await client.post("/auth/providers", json={
-        "provider": "anthropic",
-        "api_key": "sk-ant-admin-badkey",
-        "tier": "tier2",
-    }, headers=headers)
+    resp = await client.post(
+        "/auth/providers",
+        json={
+            "provider": "anthropic",
+            "api_key": "sk-ant-admin-badkey",
+            "tier": "tier2",
+        },
+        headers=headers,
+    )
     assert resp.status_code == 400
 
 
@@ -94,11 +110,15 @@ async def test_add_anthropic_key_not_readonly(mock_get, client: AsyncClient):
     mock_get.return_value = provider
 
     headers = await _get_auth_headers(client)
-    resp = await client.post("/auth/providers", json={
-        "provider": "anthropic",
-        "api_key": "sk-ant-admin-fullaccess",
-        "tier": "tier2",
-    }, headers=headers)
+    resp = await client.post(
+        "/auth/providers",
+        json={
+            "provider": "anthropic",
+            "api_key": "sk-ant-admin-fullaccess",
+            "tier": "tier2",
+        },
+        headers=headers,
+    )
     assert resp.status_code == 400
     assert "not read-only" in resp.json()["detail"].lower()
 
@@ -115,10 +135,14 @@ async def test_add_openai_key_success(mock_get, client: AsyncClient):
     mock_get.return_value = provider
 
     headers = await _get_auth_headers(client)
-    resp = await client.post("/auth/providers", json={
-        "provider": "openai",
-        "api_key": "sk-proj-xxxxxxxxxxxxxxxxxxxx",
-    }, headers=headers)
+    resp = await client.post(
+        "/auth/providers",
+        json={
+            "provider": "openai",
+            "api_key": "sk-proj-xxxxxxxxxxxxxxxxxxxx",
+        },
+        headers=headers,
+    )
     assert resp.status_code == 201
     assert resp.json()["provider"] == "openai"
 
@@ -132,10 +156,14 @@ async def test_add_openai_key_invalid(mock_get, client: AsyncClient):
     mock_get.return_value = provider
 
     headers = await _get_auth_headers(client)
-    resp = await client.post("/auth/providers", json={
-        "provider": "openai",
-        "api_key": "sk-badkey",
-    }, headers=headers)
+    resp = await client.post(
+        "/auth/providers",
+        json={
+            "provider": "openai",
+            "api_key": "sk-badkey",
+        },
+        headers=headers,
+    )
     assert resp.status_code == 400
 
 
@@ -148,10 +176,14 @@ async def test_add_openai_key_not_readonly(mock_get, client: AsyncClient):
     mock_get.return_value = provider
 
     headers = await _get_auth_headers(client)
-    resp = await client.post("/auth/providers", json={
-        "provider": "openai",
-        "api_key": "sk-proj-fullaccess",
-    }, headers=headers)
+    resp = await client.post(
+        "/auth/providers",
+        json={
+            "provider": "openai",
+            "api_key": "sk-proj-fullaccess",
+        },
+        headers=headers,
+    )
     assert resp.status_code == 400
     assert "not read-only" in resp.json()["detail"].lower()
 
@@ -169,10 +201,14 @@ async def test_add_google_key_success(mock_get, client: AsyncClient):
 
     sa_json = '{"type":"service_account","project_id":"my-project","private_key":"key","client_email":"sa@proj.iam.gserviceaccount.com"}'
     headers = await _get_auth_headers(client)
-    resp = await client.post("/auth/providers", json={
-        "provider": "google",
-        "api_key": sa_json,
-    }, headers=headers)
+    resp = await client.post(
+        "/auth/providers",
+        json={
+            "provider": "google",
+            "api_key": sa_json,
+        },
+        headers=headers,
+    )
     assert resp.status_code == 201
     assert resp.json()["provider"] == "google"
 
@@ -186,10 +222,14 @@ async def test_add_google_key_insufficient_permissions(mock_get, client: AsyncCl
     mock_get.return_value = provider
 
     headers = await _get_auth_headers(client)
-    resp = await client.post("/auth/providers", json={
-        "provider": "google",
-        "api_key": '{"type":"service_account","project_id":"p","private_key":"k","client_email":"e"}',
-    }, headers=headers)
+    resp = await client.post(
+        "/auth/providers",
+        json={
+            "provider": "google",
+            "api_key": '{"type":"service_account","project_id":"p","private_key":"k","client_email":"e"}',
+        },
+        headers=headers,
+    )
     assert resp.status_code == 400
     assert "permissions" in resp.json()["detail"].lower()
 
@@ -206,21 +246,35 @@ async def test_add_provider_duplicate(mock_get, client: AsyncClient):
     mock_get.return_value = provider
 
     headers = await _get_auth_headers(client)
-    await client.post("/auth/providers", json={
-        "provider": "openai", "api_key": "sk-proj-xxx",
-    }, headers=headers)
-    resp = await client.post("/auth/providers", json={
-        "provider": "openai", "api_key": "sk-proj-yyy",
-    }, headers=headers)
+    await client.post(
+        "/auth/providers",
+        json={
+            "provider": "openai",
+            "api_key": "sk-proj-xxx",
+        },
+        headers=headers,
+    )
+    resp = await client.post(
+        "/auth/providers",
+        json={
+            "provider": "openai",
+            "api_key": "sk-proj-yyy",
+        },
+        headers=headers,
+    )
     assert resp.status_code == 409
 
 
 @pytest.mark.asyncio
 async def test_add_provider_no_auth(client: AsyncClient):
     """Adding provider without auth → 403."""
-    resp = await client.post("/auth/providers", json={
-        "provider": "openai", "api_key": "sk-xxx",
-    })
+    resp = await client.post(
+        "/auth/providers",
+        json={
+            "provider": "openai",
+            "api_key": "sk-xxx",
+        },
+    )
     assert resp.status_code == 403
 
 
@@ -233,9 +287,14 @@ async def test_list_providers(mock_get, client: AsyncClient):
     mock_get.return_value = provider
 
     headers = await _get_auth_headers(client)
-    await client.post("/auth/providers", json={
-        "provider": "openai", "api_key": "sk-proj-xxx",
-    }, headers=headers)
+    await client.post(
+        "/auth/providers",
+        json={
+            "provider": "openai",
+            "api_key": "sk-proj-xxx",
+        },
+        headers=headers,
+    )
 
     resp = await client.get("/auth/providers", headers=headers)
     assert resp.status_code == 200
@@ -253,9 +312,14 @@ async def test_delete_provider(mock_get, client: AsyncClient):
     mock_get.return_value = provider
 
     headers = await _get_auth_headers(client)
-    await client.post("/auth/providers", json={
-        "provider": "openai", "api_key": "sk-proj-xxx",
-    }, headers=headers)
+    await client.post(
+        "/auth/providers",
+        json={
+            "provider": "openai",
+            "api_key": "sk-proj-xxx",
+        },
+        headers=headers,
+    )
 
     resp = await client.delete("/auth/providers/openai", headers=headers)
     assert resp.status_code == 204
@@ -273,9 +337,14 @@ async def test_key_stored_encrypted(mock_get, client: AsyncClient):
     mock_get.return_value = provider
 
     headers = await _get_auth_headers(client)
-    resp = await client.post("/auth/providers", json={
-        "provider": "openai", "api_key": "sk-proj-secretkey12345",
-    }, headers=headers)
+    resp = await client.post(
+        "/auth/providers",
+        json={
+            "provider": "openai",
+            "api_key": "sk-proj-secretkey12345",
+        },
+        headers=headers,
+    )
     assert resp.status_code == 201
     # The response should NOT contain the full key
     data = resp.json()

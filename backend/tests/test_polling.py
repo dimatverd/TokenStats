@@ -1,12 +1,11 @@
 """Tests for polling tasks — US-09 acceptance criteria."""
 
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.cache import clear_all, get_cached_rate_limits, get_cached_snapshot
-from app.providers.base import CostData, RateLimitInfo, UsageData
+from app.providers.base import RateLimitInfo
 
 
 @pytest.fixture(autouse=True)

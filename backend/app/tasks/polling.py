@@ -5,7 +5,6 @@ import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.encryption import decrypt_key
 from app.auth.models import APIKeyStore
@@ -45,7 +44,9 @@ async def _poll_user_provider(record: APIKeyStore, fetch_rate_limits=True, fetch
             rate_limits = await provider.get_rate_limits(api_key, **kwargs)
             set_cached_rate_limits(record.user_id, record.provider.value, rate_limits)
         except Exception as e:
-            logger.warning("Rate limits fetch failed for user=%s provider=%s: %s", record.user_id, record.provider.value, e)
+            logger.warning(
+                "Rate limits fetch failed for user=%s provider=%s: %s", record.user_id, record.provider.value, e
+            )
             error = str(e)
 
     if fetch_usage_costs:
@@ -77,18 +78,19 @@ async def _poll_user_provider(record: APIKeyStore, fetch_rate_limits=True, fetch
 
     logger.info(
         "Polled user=%s provider=%s: %d rate_limits, %d usage, costs=%s, stale=%s",
-        record.user_id, record.provider.value,
-        len(rate_limits), len(usage),
-        costs is not None, snapshot.is_stale,
+        record.user_id,
+        record.provider.value,
+        len(rate_limits),
+        len(usage),
+        costs is not None,
+        snapshot.is_stale,
     )
 
 
 async def _poll_all(fetch_rate_limits=True, fetch_usage_costs=True):
     """Poll all active providers for all users."""
     async with async_session() as db:
-        result = await db.execute(
-            select(APIKeyStore).where(APIKeyStore.is_valid == True)
-        )
+        result = await db.execute(select(APIKeyStore).where(APIKeyStore.is_valid.is_(True)))
         records = result.scalars().all()
 
     for record in records:
