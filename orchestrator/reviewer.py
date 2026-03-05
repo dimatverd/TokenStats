@@ -179,7 +179,7 @@ def run_codex_review(
 
     response = client.chat.completions.create(
         model=review_config.model,
-        max_tokens=review_config.max_tokens,
+        max_completion_tokens=review_config.max_tokens,
         messages=[
             {"role": "system", "content": REVIEW_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
