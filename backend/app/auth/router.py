@@ -8,11 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
 from app.auth.encryption import encrypt_key
-from app.auth.models import APIKeyStore, ProviderType, User
+from app.auth.models import APIKeyStore, ProviderType, RefreshTokenBlacklist, User
 from app.auth.schemas import (
     AddProviderRequest,
     LoginRequest,
     ProviderKeyResponse,
+    RefreshTokenRequest,
     RegisterRequest,
     RegisterResponse,
     TokenResponse,
@@ -82,29 +83,43 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/token", response_model=TokenResponse)
-async def refresh_token(body: dict, db: AsyncSession = Depends(get_db)):
-    token = body.get("refresh_token")
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token required")
-
+async def refresh_token(body: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
     try:
-        payload = decode_token(token)
+        payload = decode_token(body.refresh_token)
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
         user_id = int(payload["sub"])
+        jti = payload.get("jti")
     except (Exception, KeyError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    if not jti:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    # Check blacklist — reject already-used tokens (replay protection)
+    blacklisted = await db.execute(select(RefreshTokenBlacklist).where(RefreshTokenBlacklist.jti == jti))
+    if blacklisted.scalar_one_or_none():
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token already used")
 
     result = await db.execute(select(User).where(User.id == user_id, User.is_active.is_(True)))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
+    # Revoke the used refresh token before issuing new ones
+    db.add(RefreshTokenBlacklist(jti=jti, user_id=user.id))
+    await db.commit()
+
     return TokenResponse(
         access_token=create_access_token(user.id),
         refresh_token=create_refresh_token(user.id),
         expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(_: User = Depends(get_current_user)):
+    """Invalidate session — client must discard stored tokens."""
 
 
 # ── Provider key management ──────────────────────────────

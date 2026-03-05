@@ -14,6 +14,17 @@ def _utcnow():
     return datetime.now(UTC)
 
 
+class RefreshTokenBlacklist(Base):
+    """Stores jti of revoked/used refresh tokens to prevent replay attacks."""
+
+    __tablename__ = "refresh_token_blacklist"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    jti = Column(String(36), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    revoked_at = Column(DateTime, default=_utcnow, nullable=False)
+
+
 class User(Base):
     __tablename__ = "users"
 
