@@ -186,30 +186,33 @@ class Daemon:
             if result and result.success and result.pr_url:
                 # Code review with Codex
                 if self.config.review.enabled:
-                    self.state.transition(issue_id, OrchestratorStatus.REVIEWING)
-                    await asyncio.to_thread(workpad.update, "Running Codex code review...")
+                    try:
+                        self.state.transition(issue_id, OrchestratorStatus.REVIEWING)
+                        await asyncio.to_thread(workpad.update, "Running Codex code review...")
 
-                    diff = await asyncio.to_thread(get_pr_diff, workspace_path, self.config.workspace.base_branch)
-                    codex_review = await asyncio.to_thread(
-                        run_codex_review, diff, self.config.review, title
-                    )
-                    cto_verdict, cto_reason = cto_evaluate(codex_review, self.config.review)
+                        diff = await asyncio.to_thread(get_pr_diff, workspace_path, self.config.workspace.base_branch)
+                        codex_review = await asyncio.to_thread(
+                            run_codex_review, diff, self.config.review, title
+                        )
+                        cto_verdict, cto_reason = cto_evaluate(codex_review, self.config.review)
 
-                    # Log review to workpad
-                    review_text = format_review_for_workpad(codex_review, cto_verdict, cto_reason)
-                    await asyncio.to_thread(workpad.update, review_text)
+                        review_text = format_review_for_workpad(codex_review, cto_verdict, cto_reason)
+                        await asyncio.to_thread(workpad.update, review_text)
 
-                    self.state.transition(issue_id, OrchestratorStatus.RUNNING,
-                                          review_result=cto_verdict.value)
+                        self.state.transition(issue_id, OrchestratorStatus.RUNNING,
+                                              review_result=cto_verdict.value)
 
-                    if cto_verdict == ReviewVerdict.REQUEST_CHANGES:
-                        # TODO: could re-run agent with review feedback
-                        await asyncio.to_thread(workpad.update, f"Review requested changes: {cto_reason}")
-                        logger.warning(f"{identifier}: Codex requested changes — {cto_reason}")
+                        if cto_verdict == ReviewVerdict.REQUEST_CHANGES:
+                            await asyncio.to_thread(workpad.update, f"Review requested changes: {cto_reason}")
+                            logger.warning(f"{identifier}: Codex requested changes — {cto_reason}")
 
-                    elif cto_verdict == ReviewVerdict.NEEDS_HUMAN_REVIEW:
-                        await asyncio.to_thread(workpad.update, f"Escalated to human review: {cto_reason}")
-                        logger.info(f"{identifier}: Escalated to human review")
+                        elif cto_verdict == ReviewVerdict.NEEDS_HUMAN_REVIEW:
+                            await asyncio.to_thread(workpad.update, f"Escalated to human review: {cto_reason}")
+                            logger.info(f"{identifier}: Escalated to human review")
+
+                    except Exception:
+                        logger.exception(f"{identifier}: Codex review failed, proceeding without review")
+                        await asyncio.to_thread(workpad.update, "Codex review failed — skipping")
 
                 # PR created → In Review
                 self.state.transition(issue_id, OrchestratorStatus.PR_CREATED, pr_url=result.pr_url)

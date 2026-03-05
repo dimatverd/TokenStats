@@ -109,7 +109,10 @@ def _parse_findings(text: str) -> list[ReviewFinding]:
             current["file"] = line.split(":", 1)[1].strip()
         elif line.startswith("line:"):
             val = line.split(":", 1)[1].strip()
-            current["line"] = int(val) if val != "null" else None
+            try:
+                current["line"] = int(val) if val not in ("null", "None", "") else None
+            except ValueError:
+                current["line"] = None
         elif line.startswith("description:"):
             current["description"] = line.split(":", 1)[1].strip()
         elif line.startswith("suggestion:"):
@@ -157,6 +160,9 @@ def _parse_summary(text: str) -> str:
     return ""
 
 
+MAX_DIFF_CHARS = 60_000  # ~15k tokens, safe for o3 context
+
+
 def run_codex_review(
     diff: str,
     review_config: ReviewConfig,
@@ -165,6 +171,7 @@ def run_codex_review(
     """Send diff to OpenAI Codex (o3) for code review.
 
     Uses OPENAI_API_KEY env var for auth (Plus subscription tokens).
+    Truncates large diffs to avoid context limits.
     """
     if not diff.strip():
         return CodexReviewResult(
@@ -173,28 +180,53 @@ def run_codex_review(
             confidence=1.0,
         )
 
+    # Truncate large diffs
+    truncated = False
+    if len(diff) > MAX_DIFF_CHARS:
+        diff = diff[:MAX_DIFF_CHARS] + "\n... [truncated]"
+        truncated = True
+
     client = OpenAI()  # Uses OPENAI_API_KEY env var
 
     user_prompt = f"PR: {issue_title}\n\n```diff\n{diff}\n```" if issue_title else f"```diff\n{diff}\n```"
 
-    response = client.chat.completions.create(
-        model=review_config.model,
-        max_completion_tokens=review_config.max_tokens,
-        messages=[
-            {"role": "system", "content": REVIEW_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-    )
+    try:
+        response = client.chat.completions.create(
+            model=review_config.model,
+            max_completion_tokens=review_config.max_tokens,
+            messages=[
+                {"role": "system", "content": REVIEW_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+    except Exception as exc:
+        return CodexReviewResult(
+            verdict=ReviewVerdict.NEEDS_HUMAN_REVIEW,
+            summary=f"Codex review failed: {exc}",
+            confidence=0.0,
+            raw_response=str(exc),
+        )
 
     raw = response.choices[0].message.content or ""
 
-    return CodexReviewResult(
+    result = CodexReviewResult(
         verdict=_parse_verdict(raw),
         summary=_parse_summary(raw),
         findings=_parse_findings(raw),
         raw_response=raw,
         confidence=_parse_confidence(raw),
     )
+
+    if truncated:
+        result = CodexReviewResult(
+            verdict=result.verdict,
+            summary=result.summary + " (diff was truncated)",
+            findings=result.findings,
+            raw_response=result.raw_response,
+            confidence=max(result.confidence - 0.1, 0.0),
+        )
+
+    return result
 
 
 def cto_evaluate(
