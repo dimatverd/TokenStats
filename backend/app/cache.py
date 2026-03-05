@@ -1,9 +1,49 @@
 """TTL cache for provider data — swap for Redis in production."""
 
+from collections import deque
+from dataclasses import dataclass
+from datetime import datetime
+
 from cachetools import TTLCache
 
 from app.config import settings
 from app.providers.base import CostData, ProviderSnapshot, RateLimitInfo, UsageData
+
+# ── History ring buffer (last 24h) ──────────────────────
+
+MAX_HISTORY_POINTS = 1440  # 24h at one point per minute
+
+
+@dataclass
+class HistoryPoint:
+    """A single historical data point for charts."""
+
+    timestamp: datetime
+    rpm_pct: float
+    tpm_pct: float
+    cost_usd: float
+
+
+# keyed by "user_id:provider" -> deque of HistoryPoint
+_history_store: dict[str, deque[HistoryPoint]] = {}
+
+
+def append_history_point(user_id: int, provider: str, point: HistoryPoint) -> None:
+    """Append a history point to the ring buffer for a user+provider."""
+    k = _key(user_id, provider)
+    if k not in _history_store:
+        _history_store[k] = deque(maxlen=MAX_HISTORY_POINTS)
+    _history_store[k].append(point)
+
+
+def get_history(user_id: int, provider: str) -> list[HistoryPoint]:
+    """Return all history points for a user+provider."""
+    k = _key(user_id, provider)
+    buf = _history_store.get(k)
+    if buf is None:
+        return []
+    return list(buf)
+
 
 # Separate caches with different TTLs
 _rate_limits_cache: TTLCache = TTLCache(maxsize=256, ttl=settings.CACHE_TTL_RATE_LIMITS)
@@ -78,3 +118,4 @@ def clear_all():
     _usage_cache.clear()
     _costs_cache.clear()
     _snapshot_cache.clear()
+    _history_store.clear()
