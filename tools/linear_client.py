@@ -230,6 +230,17 @@ class LinearClient:
         data = self._request(mutation, {"input": {"issueId": issue_id, "body": body}})
         return data["commentCreate"]["comment"]
 
+    def update_comment(self, comment_id: str, body: str) -> dict:
+        mutation = """
+        mutation($id: String!, $input: CommentUpdateInput!) {
+            commentUpdate(id: $id, input: $input) {
+                success
+                comment { id body }
+            }
+        }"""
+        data = self._request(mutation, {"id": comment_id, "input": {"body": body}})
+        return data["commentUpdate"]["comment"]
+
 
 # ── State file management ───────────────────────────────────
 
